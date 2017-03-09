@@ -2,9 +2,6 @@
 var request = require('../../');
 
 describe('exports', function(){
-  it('should expose Part', function(){
-    request.Part.should.be.a.function;
-  })
 
   it('should expose .protocols', function(){
     Object.keys(request.protocols)
@@ -18,6 +15,6 @@ describe('exports', function(){
 
   it('should expose .parse', function(){
     Object.keys(request.parse)
-      .should.eql(['application/x-www-form-urlencoded', 'application/json', 'text', 'image']);
+      .should.eql(['application/x-www-form-urlencoded', 'application/json', 'text', 'application/octet-stream', 'image']);
   })
 })

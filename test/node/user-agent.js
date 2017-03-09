@@ -1,48 +1,36 @@
-
-var request = require('../..')
-  , express = require('express')
-  , assert = require('better-assert')
-  , app = express()
-  , url = require('url');
-
-app.all('/ua', function(req, res){
-  res.writeHead(200, req.headers);
-  req.pipe(res);
-});
-
-app.listen(3345);
+var assert = require('assert');
+var request = require('../../');
+var setup = require('../support/setup');
+var base = setup.uri;
 
 describe('req.get()', function(){
-  it('should set a default user-agent', function(done){
-    request
-    .get('http://localhost:3345/ua')
-    .end(function(err, res){
+  it('should set a default user-agent', function(){
+    return request
+    .get(base + '/ua')
+    .then(function(res){
       assert(res.headers);
       assert(res.headers['user-agent']);
-      assert(/^node-superagent\/\d+\.\d+\.\d+$/.test(res.headers['user-agent']));
-      done();
+      assert(/^node-superagent\/\d+\.\d+\.\d+(?:-[a-z]+\.\d+|$)/.test(res.headers['user-agent']));
     });
   });
 
-  it('should be able to override user-agent', function(done){
-    request
-    .get('http://localhost:3345/ua')
+  it('should be able to override user-agent', function(){
+    return request
+    .get(base + '/ua')
     .set('User-Agent', 'foo/bar')
-    .end(function(err, res){
+    .then(function(res){
       assert(res.headers);
-      assert(res.headers['user-agent'] == 'foo/bar');
-      done();
+      assert.equal(res.headers['user-agent'], 'foo/bar');
     });
   });
 
-  it('should be able to wipe user-agent', function(done){
-    request
-    .get('http://localhost:3345/ua')
+  it('should be able to wipe user-agent', function(){
+    return request
+    .get(base + '/ua')
     .unset('User-Agent')
-    .end(function(err, res){
+    .then(function(res){
       assert(res.headers);
-      assert(res.headers['user-agent'] == void 0);
-      done();
+      assert.equal(res.headers['user-agent'], void 0);
     });
   });
 });

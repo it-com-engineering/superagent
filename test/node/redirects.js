@@ -1,90 +1,8 @@
+var setup = require('../support/setup');
+var base = setup.uri;
 
-var EventEmitter = require('events').EventEmitter
-  , request = require('../../')
-  , express = require('express')
-  , assert = require('assert')
-  , app = express()
-  , should = require('should');
-
-app.get('/', function(req, res){
-  res.set('QUERY', JSON.stringify(req.query));
-  res.redirect('/movies');
-});
-
-app.get('/movies', function(req, res){
-  res.set('QUERY', JSON.stringify(req.query));
-  res.redirect('/movies/all');
-});
-
-app.get('/movies/all', function(req, res){
-  res.set('QUERY', JSON.stringify(req.query));
-  res.redirect('/movies/all/0');
-});
-
-app.get('/movies/all/0', function(req, res){
-  res.set('QUERY', JSON.stringify(req.query));
-  res.send('first movie page');
-});
-
-app.get('/movies/random', function(req, res){
-  res.redirect('/movie/4');
-});
-
-app.get('/movie/4', function(req, res){
-  setTimeout(function(){
-    res.send('not-so-random movie');
-  }, 1000);
-});
-
-app.post('/movie', function(req, res){
-  res.redirect('/movies/all/0');
-});
-
-app.put('/redirect-303', function(req, res){
-  res.redirect(303, '/reply-method');
-});
-
-app.put('/redirect-307', function(req, res){
-  res.redirect(307, '/reply-method');
-});
-
-app.put('/redirect-308', function(req, res){
-  res.redirect(308, '/reply-method');
-});
-
-app.all('/reply-method', function(req, res){
-  res.send('method=' + req.method.toLowerCase());
-});
-
-app.get('/tobi', function(req, res){
-  res.send('tobi');
-});
-
-app.get('/relative', function(req, res){
-  res.redirect('tobi');
-});
-
-app.get('/relative/sub', function(req, res){
-  res.redirect('../tobi');
-});
-
-app.get('/header', function(req, res){
-  res.redirect('/header/2');
-});
-
-app.post('/header', function(req, res){
-  res.redirect('/header/2');
-});
-
-app.get('/header/2', function(req, res){
-  res.send(req.headers);
-});
-
-app.get('/bad-redirect', function(req, res){
-  res.status(307).end();
-});
-
-app.listen(3003);
+var assert = require('assert');
+var request = require('../../');
 
 describe('request', function(){
   describe('on redirect', function(){
@@ -92,56 +10,100 @@ describe('request', function(){
       var redirects = [];
 
       request
-      .get('http://localhost:3003/')
+      .get(base)
       .on('redirect', function(res){
         redirects.push(res.headers.location);
       })
       .end(function(err, res){
-        var arr = [];
-        arr.push('/movies');
-        arr.push('/movies/all');
-        arr.push('/movies/all/0');
-        redirects.should.eql(arr);
-        res.text.should.equal('first movie page');
-        done();
+        try {
+          var arr = [];
+          arr.push('/movies');
+          arr.push('/movies/all');
+          arr.push('/movies/all/0');
+          redirects.should.eql(arr);
+          res.text.should.equal('first movie page');
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
 
-    it('should retain header fields', function(done){
-      request
-      .get('http://localhost:3003/header')
-      .set('X-Foo', 'bar')
+    it('should not follow on HEAD by default', function(done){
+      var redirects = [];
+
+      request.head(base)
+      .on('redirect', function(res){
+        redirects.push(res.headers.location);
+      })
       .end(function(err, res){
-        res.body.should.have.property('x-foo', 'bar');
-        done();
+        try {
+          redirects.should.eql([]);
+          res.status.should.equal(302);
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
+
+    it('should follow on HEAD when redirects are set', function(done){
+      var redirects = [];
+
+      request.head(base)
+      .redirects(10)
+      .on('redirect', function(res){
+        redirects.push(res.headers.location);
+      })
+      .end(function(err, res){
+        try {
+          var arr = [];
+          arr.push('/movies');
+          arr.push('/movies/all');
+          arr.push('/movies/all/0');
+          redirects.should.eql(arr);
+          assert(!res.text);
+          done();
+        } catch(err) {
+          done(err);
+        }
+      });
+    });
 
     it('should remove Content-* fields', function(done){
       request
-      .post('http://localhost:3003/header')
+      .post(base + '/header')
       .type('txt')
       .set('X-Foo', 'bar')
       .set('X-Bar', 'baz')
       .send('hey')
       .end(function(err, res){
-        res.body.should.have.property('x-foo', 'bar');
-        res.body.should.have.property('x-bar', 'baz');
-        res.body.should.not.have.property('content-type');
-        res.body.should.not.have.property('content-length');
-        res.body.should.not.have.property('transfer-encoding');
-        done();
+        try {
+          assert(res.body);
+          res.body.should.have.property('x-foo', 'bar');
+          res.body.should.have.property('x-bar', 'baz');
+          res.body.should.not.have.property('content-type');
+          res.body.should.not.have.property('content-length');
+          res.body.should.not.have.property('transfer-encoding');
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
 
-    it('should preserve timeout across redirects', function(done){
+    it('should retain cookies', function(done){
       request
-      .get('http://localhost:3003/movies/random')
-      .timeout(250)
+      .get(base + '/header')
+      .set('Cookie', 'foo=bar;')
       .end(function(err, res){
-        assert(err instanceof Error, 'expected an error');
-        err.should.have.property('timeout', 250);
-        done();
+        try {
+          assert(res.body);
+          res.body.should.have.property('cookie', 'foo=bar;');
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
 
@@ -150,31 +112,39 @@ describe('request', function(){
       var query = [];
 
       request
-      .get('http://localhost:3003/?foo=bar')
+      .get(base + '/?foo=bar')
       .on('redirect', function(res){
         query.push(res.headers.query);
         redirects.push(res.headers.location);
       })
       .end(function(err, res){
-        var arr = [];
-        arr.push('/movies');
-        arr.push('/movies/all');
-        arr.push('/movies/all/0');
-        redirects.should.eql(arr);
-        res.text.should.equal('first movie page');
+        try {
+          var arr = [];
+          arr.push('/movies');
+          arr.push('/movies/all');
+          arr.push('/movies/all/0');
+          redirects.should.eql(arr);
+          res.text.should.equal('first movie page');
 
-        query.should.eql(['{"foo":"bar"}', '{}', '{}']);
-        res.headers.query.should.eql('{}');
-        done();
+          query.should.eql(['{"foo":"bar"}', '{}', '{}']);
+          res.headers.query.should.eql('{}');
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
 
     it('should handle no location header', function(done){
       request
-      .get('http://localhost:3003/bad-redirect')
+      .get(base + '/bad-redirect')
       .end(function(err, res){
-        err.message.should.equal('No location header for redirect');
-        done();
+        try {
+          err.message.should.equal('No location header for redirect');
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
 
@@ -183,15 +153,18 @@ describe('request', function(){
         var redirects = [];
 
         request
-        .get('http://localhost:3003/relative')
+        .get(base + '/relative')
         .on('redirect', function(res){
           redirects.push(res.headers.location);
         })
         .end(function(err, res){
-          var arr = [];
-          redirects.should.eql(['tobi']);
-          res.text.should.equal('tobi');
-          done();
+          try {
+            redirects.should.eql(['tobi']);
+            res.text.should.equal('tobi');
+            done();
+          } catch(err) {
+            done(err);
+          }
         });
       })
 
@@ -199,15 +172,18 @@ describe('request', function(){
         var redirects = [];
 
         request
-        .get('http://localhost:3003/relative/sub')
+        .get(base + '/relative/sub')
         .on('redirect', function(res){
           redirects.push(res.headers.location);
         })
         .end(function(err, res){
-          var arr = [];
-          redirects.should.eql(['../tobi']);
-          res.text.should.equal('tobi');
-          done();
+          try {
+            redirects.should.eql(['../tobi']);
+            res.text.should.equal('tobi');
+            done();
+          } catch(err) {
+            done(err);
+          }
         });
       })
     })
@@ -218,19 +194,23 @@ describe('request', function(){
       var redirects = [];
 
       request
-      .get('http://localhost:3003/')
+      .get(base)
       .redirects(2)
       .on('redirect', function(res){
         redirects.push(res.headers.location);
       })
       .end(function(err, res){
-        var arr = [];
-        assert(res.redirect, 'res.redirect');
-        arr.push('/movies');
-        arr.push('/movies/all');
-        redirects.should.eql(arr);
-        res.text.should.match(/Moved Temporarily/);
-        done();
+        try {
+          var arr = [];
+          assert(res.redirect, 'res.redirect');
+          arr.push('/movies');
+          arr.push('/movies/all');
+          redirects.should.eql(arr);
+          res.text.should.match(/Moved Temporarily|Found/);
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
   })
@@ -240,67 +220,50 @@ describe('request', function(){
       var redirects = [];
 
       request
-      .post('http://localhost:3003/movie')
+      .post(base + '/movie')
       .send({ name: 'Tobi' })
       .redirects(2)
       .on('redirect', function(res){
         redirects.push(res.headers.location);
       })
       .end(function(err, res){
-        var arr = [];
-        arr.push('/movies/all/0');
-        redirects.should.eql(arr);
-        res.text.should.equal('first movie page');
-        done();
+        try {
+          var arr = [];
+          arr.push('/movies/all/0');
+          redirects.should.eql(arr);
+          res.text.should.equal('first movie page');
+          done();
+        } catch(err) {
+          done(err);
+        }
       });
     })
   })
 
-  describe('on 303', function(){
-    it('should redirect with same method', function(done){
+  describe('on POST using multipart/form-data', function(){
+    it('should redirect as GET', function(done){
+      var redirects = [];
+
       request
-      .put('http://localhost:3003/redirect-303')
-      .send({msg: "hello"})
-      .redirects(1)
-      .on('redirect', function(res) {
-        res.headers.location.should.equal('/reply-method')
+      .post(base + '/movie')
+      .type('form')
+      .field('name', 'Tobi')
+      .redirects(2)
+      .on('redirect', function(res){
+        redirects.push(res.headers.location);
       })
       .end(function(err, res){
-        res.text.should.equal('method=get');
-        done();
-      })
+        try {
+          var arr = [];
+          arr.push('/movies/all/0');
+          redirects.should.eql(arr);
+          res.text.should.equal('first movie page');
+          done();
+        } catch(err) {
+          done(err);
+        }
+      });
     })
   })
 
-  describe('on 307', function(){
-    it('should redirect with same method', function(done){
-      request
-      .put('http://localhost:3003/redirect-307')
-      .send({msg: "hello"})
-      .redirects(1)
-      .on('redirect', function(res) {
-        res.headers.location.should.equal('/reply-method')
-      })
-      .end(function(err, res){
-        res.text.should.equal('method=put');
-        done();
-      })
-    })
-  })
-
-  describe('on 308', function(){
-    it('should redirect with same method', function(done){
-      request
-      .put('http://localhost:3003/redirect-308')
-      .send({msg: "hello"})
-      .redirects(1)
-      .on('redirect', function(res) {
-        res.headers.location.should.equal('/reply-method')
-      })
-      .end(function(err, res){
-        res.text.should.equal('method=put');
-        done();
-      })
-    })
-  })
 })

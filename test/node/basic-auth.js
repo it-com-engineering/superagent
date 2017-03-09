@@ -1,26 +1,17 @@
-
-var EventEmitter = require('events').EventEmitter
-  , request = require('../../')
-  , express = require('express')
-  , assert = require('assert')
-  , app = express()
-  , basicAuth = require('basic-auth-connect');
-
-app.get('/', basicAuth('tobi', 'learnboost'), function(req, res){
-  res.end('you win!');
-});
-
-app.get('/again', basicAuth('tobi', ''), function(req, res){
-  res.end('you win again!');
-});
-
-app.listen(3010);
+var request = require('../../');
+var setup = require('../support/setup');
+var base = setup.uri;
+var URL = require('url');
 
 describe('Basic auth', function(){
   describe('when credentials are present in url', function(){
     it('should set Authorization', function(done){
+      var new_url = URL.parse(base);
+      new_url.auth = 'tobi:learnboost';
+      new_url.pathname = '/basic-auth';
+
       request
-      .get('http://tobi:learnboost@localhost:3010')
+      .get(URL.format(new_url))
       .end(function(err, res){
         res.status.should.equal(200);
         done();
@@ -31,7 +22,7 @@ describe('Basic auth', function(){
   describe('req.auth(user, pass)', function(){
     it('should set Authorization', function(done){
       request
-      .get('http://localhost:3010')
+      .get(base + '/basic-auth')
       .auth('tobi', 'learnboost')
       .end(function(err, res){
         res.status.should.equal(200);
@@ -43,7 +34,7 @@ describe('Basic auth', function(){
   describe('req.auth(user + ":" + pass)', function(){
     it('should set authorization', function(done){
       request
-      .get('http://localhost:3010/again')
+      .get(base + '/basic-auth/again')
       .auth('tobi')
       .end(function(err, res){
         res.status.should.eql(200);

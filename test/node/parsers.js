@@ -1,54 +1,37 @@
-
-var request = require('../..')
-  , express = require('express')
-  , assert = require('better-assert')
-  , fs = require('fs')
-  , app = express();
-
-app.get('/manny', function(req, res){
-  res.status(200).json({name:"manny"});
-});
-
-
-var img = fs.readFileSync(__dirname + '/fixtures/test.png');
-
-app.get('/image', function(req, res){
-  res.writeHead(200, {'Content-Type': 'image/png' });
-  res.end(img, 'binary');
-});
-
-app.listen(3033);
+var assert = require('assert');
+var request = require('../../');
+var setup = require('../support/setup');
+var base = setup.uri;
 
 describe('req.parse(fn)', function(){
   it('should take precedence over default parsers', function(done){
     request
-    .get('http://localhost:3033/manny')
+    .get(base + '/manny')
     .parse(request.parse['application/json'])
     .end(function(err, res){
       assert(res.ok);
-      assert('{"name":"manny"}' == res.text);
-      assert('manny' == res.body.name);
+      assert.equal('{"name":"manny"}', res.text);
+      assert.equal('manny', res.body.name);
       done();
     });
   })
 
-  it('should be the only parser', function(done){
-    request
-    .get('http://localhost:3033/image')
+  it('should be the only parser', function(){
+    return request
+    .get(base + '/image')
     .parse(function(res, fn) {
       res.on('data', function() {});
     })
-    .end(function(err, res){
+    .then(function(res){
       assert(res.ok);
-      assert(res.text === undefined);
+      assert.strictEqual(res.text, undefined);
       res.body.should.eql({});
-      done();
     });
   })
 
   it('should emit error if parser throws', function(done){
     request
-    .get('http://localhost:3033/manny')
+    .get(base + '/manny')
     .parse(function() {
       throw new Error('I am broken');
     })
@@ -61,7 +44,7 @@ describe('req.parse(fn)', function(){
 
   it('should emit error if parser returns an error', function(done){
     request
-    .get('http://localhost:3033/manny')
+    .get(base + '/manny')
     .parse(function(res, fn) {
       fn(new Error('I am broken'));
     })
@@ -71,4 +54,30 @@ describe('req.parse(fn)', function(){
     })
     .end()
   })
+
+  it('should not emit error on chunked json', function(done){
+    request
+    .get(base + '/chunked-json')
+    .end(function(err){
+      assert(!err);
+      done();
+    });
+  })
+
+  it('should not emit error on aborted chunked json', function(done){
+    var req = request
+    .get(base + '/chunked-json')
+    .end(function(err){
+      assert.ifError(err);
+      done();
+    });
+
+    setTimeout(function(){req.abort()},50);
+  });
+
+  it('should not reject promise on aborted chunked json', function(){
+    var req = request.get(base + '/chunked-json')
+    setTimeout(function(){req.abort()},50);
+    return req;
+  });
 })

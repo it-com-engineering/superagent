@@ -1,3 +1,5 @@
+require('should-http');
+
 var express = require('express')
   , app = express()
   , request = require('../../')
@@ -51,7 +53,14 @@ app.get('/simple', function(req, res) {
   res.status(200).send('simple');
 });
 
-app.listen(4000);
+var base = 'http://localhost'
+var server;
+before(function listen(done) {
+  server = app.listen(0, function listening() {
+    base += ':' + server.address().port;
+    done();
+  });
+});
 
 describe('request', function() {
   describe('persistent agent', function() {
@@ -60,21 +69,19 @@ describe('request', function() {
     var agent3 = request.agent();
     var agent4 = request.agent();
 
-    it('should gain a session on POST', function(done) {
-      agent3
-        .post('http://localhost:4000/signin')
-        .end(function(err, res) {
-          should.not.exist(err);
+    it('should gain a session on POST', function() {
+      return agent3
+        .post(base + '/signin')
+        .then(function(res) {
           res.should.have.status(200);
           should.not.exist(res.headers['set-cookie']);
-          res.text.should.include('dashboard');
-          done();
+          res.text.should.containEql('dashboard');
         });
     });
 
     it('should start with empty session (set cookies)', function(done) {
       agent1
-        .get('http://localhost:4000/dashboard')
+        .get(base + '/dashboard')
         .end(function(err, res) {
           should.exist(err);
           res.should.have.status(401);
@@ -83,46 +90,39 @@ describe('request', function() {
         });
     });
 
-    it('should gain a session (cookies already set)', function(done) {
-      agent1
-        .post('http://localhost:4000/signin')
-        .end(function(err, res) {
-          should.not.exist(err);
+    it('should gain a session (cookies already set)', function() {
+      return agent1
+        .post(base + '/signin')
+        .then(function(res) {
           res.should.have.status(200);
           should.not.exist(res.headers['set-cookie']);
-          res.text.should.include('dashboard');
-          done();
+          res.text.should.containEql('dashboard');
         });
     });
 
-    it('should persist cookies across requests', function(done) {
-      agent1
-        .get('http://localhost:4000/dashboard')
-        .end(function(err, res) {
-          should.not.exist(err);
+    it('should persist cookies across requests', function() {
+      return agent1
+        .get(base + '/dashboard')
+        .then(function(res) {
           res.should.have.status(200);
-          done();
         });
     });
 
-    it('should have the cookie set in the end callback', function(done) {
-      agent4
-        .post('http://localhost:4000/setcookie')
-        .end(function(err, res) {
-          agent4
-            .get('http://localhost:4000/getcookie')
-            .end(function(err, res) {
-              should.not.exist(err);
-              res.should.have.status(200);
-              assert(res.text === 'jar');
-              done();
-            });
+    it('should have the cookie set in the end callback', function() {
+      return agent4
+        .post(base + '/setcookie')
+        .then(function() {
+          return agent4.get(base + '/getcookie')
+        })
+        .then(function(res) {
+          res.should.have.status(200);
+          assert.strictEqual(res.text, 'jar');
         });
     });
 
     it('should not share cookies', function(done) {
       agent2
-        .get('http://localhost:4000/dashboard')
+        .get(base + '/dashboard')
         .end(function(err, res) {
           should.exist(err);
           res.should.have.status(401);
@@ -130,43 +130,37 @@ describe('request', function() {
         });
     });
 
-    it('should not lose cookies between agents', function(done) {
-      agent1
-        .get('http://localhost:4000/dashboard')
-        .end(function(err, res) {
-          should.not.exist(err);
+    it('should not lose cookies between agents', function() {
+      return agent1
+        .get(base + '/dashboard')
+        .then(function(res) {
           res.should.have.status(200);
-          done();
         });
     });
 
-    it('should be able to follow redirects', function(done) {
-      agent1
-        .get('http://localhost:4000/')
-        .end(function(err, res) {
-          should.not.exist(err);
+    it('should be able to follow redirects', function() {
+      return agent1
+        .get(base)
+        .then(function(res) {
           res.should.have.status(200);
-          res.text.should.include('dashboard');
-          done();
+          res.text.should.containEql('dashboard');
         });
     });
 
-    it('should be able to post redirects', function(done) {
-      agent1
-        .post('http://localhost:4000/redirect')
+    it('should be able to post redirects', function() {
+      return agent1
+        .post(base + '/redirect')
         .send({ foo: 'bar', baz: 'blaaah' })
-        .end(function(err, res) {
-          should.not.exist(err);
+        .then(function(res) {
           res.should.have.status(200);
-          res.text.should.include('simple');
-          res.redirects.should.eql(['http://localhost:4000/simple']);
-          done();
+          res.text.should.containEql('simple');
+          res.redirects.should.eql([base + '/simple']);
         });
     });
 
     it('should be able to limit redirects', function(done) {
       agent1
-        .get('http://localhost:4000/')
+        .get(base)
         .redirects(0)
         .end(function(err, res) {
           should.exist(err);
@@ -177,20 +171,18 @@ describe('request', function() {
         });
     });
 
-    it('should be able to create a new session (clear cookie)', function(done) {
-      agent1
-        .post('http://localhost:4000/signout')
-        .end(function(err, res) {
-          should.not.exist(err);
+    it('should be able to create a new session (clear cookie)', function() {
+      return agent1
+        .post(base + '/signout')
+        .then(function(res) {
           res.should.have.status(200);
           should.exist(res.headers['set-cookie']);
-          done();
         });
     });
 
     it('should regenerate with an empty session', function(done) {
       agent1
-        .get('http://localhost:4000/dashboard')
+        .get(base + '/dashboard')
         .end(function(err, res) {
           should.exist(err);
           res.should.have.status(401);
